@@ -49,6 +49,21 @@ async function run() {
       res.send(result)
     })
 
+    app.patch("/bidprojects/:email/:id", async(req, res) => {
+      const id = req.params.id
+      const filter = {_id : new ObjectId(id)}
+      const updateBidRequest = req.body
+
+      const bidRequest = {
+        $set: {
+          status: updateBidRequest.status
+        }
+      }
+      const result = await bidProjectCollection.updateOne(filter, bidRequest)
+      res.send(result)
+    })
+
+
     app.post('/bidprojects', async(req, res) => {
       const bidProject = req.body
       const result = await bidProjectCollection.insertOne(bidProject)
