@@ -34,15 +34,20 @@ async function run() {
     // bidProject related Api
 
     app.get("/bidprojects", async (req, res) => {
-
       let query = {}
       if(req.query?.email){
         query = {userEmail: req.query.email}
       }
-      console.log(query);
       const result = await bidProjectCollection.find(query).toArray();
       res.send(result);
     });
+
+    app.get("/bidprojects/:email", async(req, res) => {
+      const email = req.params.email
+      const filter = {buyerEmail : email}
+      const result = await bidProjectCollection.find(filter).toArray()
+      res.send(result)
+    })
 
     app.post('/bidprojects', async(req, res) => {
       const bidProject = req.body
