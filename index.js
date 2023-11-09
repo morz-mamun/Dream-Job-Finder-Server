@@ -1,13 +1,19 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser')
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser())
 
 // mongoDB code
 
@@ -22,6 +28,24 @@ const client = new MongoClient(uri, {
   },
 });
 
+//  token verify middleware
+const tokenVerify = async(req, res, next) => {
+  const token = req.cookies.token
+  if(!token) {
+    return res.status(401).send({message: 'unauthorized'})
+  }
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if(err){
+      return res.status(401).send({message: 'unauthorized access'})
+    }
+
+    req.user = decoded
+
+    next()
+  })
+
+}
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -30,10 +54,31 @@ async function run() {
     const addJobCollection = client.db("dreamJobs").collection("addJobs");
     const bidProjectCollection = client.db("dreamJobs").collection("bidProjects");
 
+    // JWT API User authorization
+    
+    app.post('/jwt', async(req, res) => {
+      const user = req.body
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '3h'})
+      res
+      .cookie('token', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none'
+      })
+      .send({success: true})
+    } )
+
+    // clear token api
+    app.post('/logout', async(req, res) => {
+      const user = req.body
+      res
+      .clearCookie('token', {maxAge: 0})
+      .send({success: true})
+    })
     
     // bidProject related Api
 
-    app.get("/bidprojects", async (req, res) => {
+    app.get("/bidprojects", tokenVerify, async (req, res) => {
       let query = {}
       if(req.query?.email){
         query = {userEmail: req.query.email}
@@ -42,14 +87,14 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/bidprojects/:email", async(req, res) => {
+    app.get("/bidprojects/:email", tokenVerify, async(req, res) => {
       const email = req.params.email
       const filter = {buyerEmail : email}
       const result = await bidProjectCollection.find(filter).toArray()
       res.send(result)
     })
 
-    app.patch("/bidprojects/:email/:id", async(req, res) => {
+    app.patch("/bidprojects/:email/:id", tokenVerify, async(req, res) => {
       const id = req.params.id
       const filter = {_id : new ObjectId(id)}
       const updateBidRequest = req.body
@@ -72,12 +117,12 @@ async function run() {
     
 
     // add jobs related api
-    app.get("/addjobs", async (req, res) => {
+    app.get("/addjobs", tokenVerify, async (req, res) => {
       const result = await addJobCollection.find().toArray();
       res.send(result);
     });
 
-    app.get("/addjobs/:category", async (req, res) => {
+    app.get("/addjobs/:category", tokenVerify, async (req, res) => {
       const category = req.params.category;
       let regex = new RegExp(["^", category, "$"].join(""), "i");
       const filter = { category: regex };
@@ -85,14 +130,14 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/:category/:id", async (req, res) => {
+    app.get("/:category/:id", tokenVerify, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const result = await addJobCollection.find(filter).toArray()
       res.send(result)
     });
 
-    app.get("/:email", async(req, res) => {
+    app.get("/:email", tokenVerify, async(req, res) => {
       const email = req.params.email
       console.log(email);
       const filter = {email: email}
@@ -111,7 +156,7 @@ async function run() {
       res.send(result);
     });
 
-    app.put('/addjobs/:id', async(req, res) => {
+    app.put('/addjobs/:id', tokenVerify, async(req, res) => {
       const updateJob = req.body
       const id = req.params.id
       const filter = {_id : new ObjectId(id)}
@@ -130,7 +175,7 @@ async function run() {
       res.send(result)
     })
 
-    app.delete('/addjobs/:id', async(req, res) => {
+    app.delete('/addjobs/:id', tokenVerify, async(req, res) => {
       const id = req.params.id
       const filter= {_id: new ObjectId(id)}
       const result = await addJobCollection.deleteOne(filter)
